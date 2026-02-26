@@ -1,16 +1,21 @@
 """Payment API endpoints.
 
 Includes the EcoCash callback endpoint and cron job endpoints for
-payment expiry and slot lock release.
+payment expiry, slot lock release, and the consolidated run-all-jobs
+endpoint for Vercel Hobby plan (single cron job).
 """
+
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Request
 
 from app.core.logging import get_logger
+from app.db.client import get_supabase_client
 from app.dependencies import require_cron_auth
 from app.modules.bookings.service import BookingService
 from app.modules.payments.schemas import EcoCashCallbackPayload
 from app.modules.payments.service import PaymentService
+from app.modules.reminders.service import ReminderService
 
 logger = get_logger(__name__)
 
@@ -73,8 +78,7 @@ async def expire_payments_job(request: Request, _auth=Depends(require_cron_auth)
 async def expire_sessions_job(request: Request, _auth=Depends(require_cron_auth)):
     """Cron job: Clean up expired conversation sessions.
 
-    Runs every 10 minutes via Vercel cron. Resets expired sessions
-    to IDLE state with empty context.
+    Resets expired sessions to IDLE state with empty context.
 
     Args:
         request: The incoming request.
@@ -83,19 +87,22 @@ async def expire_sessions_job(request: Request, _auth=Depends(require_cron_auth)
     Returns:
         Dict with number of sessions reset.
     """
-    from datetime import datetime, timezone
+    count = await _reset_expired_sessions()
+    return {"status": "ok", "sessions_reset": count}
 
-    from app.db.client import get_supabase_client
 
+async def _reset_expired_sessions() -> int:
+    """Reset all expired conversation sessions to IDLE.
+
+    Returns:
+        Number of sessions reset.
+    """
     db = get_supabase_client()
     now = datetime.now(timezone.utc).isoformat()
 
     result = (
         db.table("conversation_sessions")
-        .update({
-            "state": "IDLE",
-            "context": {},
-        })
+        .update({"state": "IDLE", "context": {}})
         .lt("expires_at", now)
         .neq("state", "IDLE")
         .execute()
@@ -104,5 +111,49 @@ async def expire_sessions_job(request: Request, _auth=Depends(require_cron_auth)
     count = len(result.data) if result.data else 0
     if count > 0:
         logger.info("sessions_expired", count=count)
+    return count
 
-    return {"status": "ok", "sessions_reset": count}
+
+@router.get("/jobs/run-all")
+async def run_all_jobs(request: Request, _auth=Depends(require_cron_auth)):
+    """Consolidated cron job for Vercel Hobby plan.
+
+    Runs all three maintenance tasks in sequence:
+    1. Send due appointment reminders
+    2. Expire stale payments and release locked slots
+    3. Reset expired conversation sessions
+
+    Schedule hourly (Vercel Hobby limit: 1 cron, minimum 1-hour interval).
+
+    Args:
+        request: The incoming request.
+        _auth: Cron authentication (injected).
+
+    Returns:
+        Dict with counts from all three tasks.
+    """
+    reminder_service = ReminderService()
+    reminders_sent = await reminder_service.send_due_reminders()
+
+    payment_service = PaymentService()
+    expired_payments = await payment_service.expire_stale_payments()
+
+    booking_service = BookingService()
+    released_slots = booking_service.release_expired_locks()
+
+    sessions_reset = await _reset_expired_sessions()
+
+    logger.info(
+        "run_all_jobs_completed",
+        reminders_sent=reminders_sent,
+        expired_payments=expired_payments,
+        released_slots=released_slots,
+        sessions_reset=sessions_reset,
+    )
+    return {
+        "status": "ok",
+        "reminders_sent": reminders_sent,
+        "expired_payments": expired_payments,
+        "released_slots": released_slots,
+        "sessions_reset": sessions_reset,
+    }

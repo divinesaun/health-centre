@@ -21,7 +21,6 @@ os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
 os.environ.setdefault("SUPABASE_PUBLISHABLE_KEY", "test-key")
 os.environ.setdefault("TWILIO_ACCOUNT_SID", "ACtest")
 os.environ.setdefault("TWILIO_AUTH_TOKEN", "test-auth-token")
-os.environ.setdefault("TWILIO_WHATSAPP_NUMBER", "whatsapp:+14155238886")
 os.environ.setdefault("ECOCASH_API_KEY", "test-ecocash-key")
 os.environ.setdefault("ECOCASH_BASE_URL", "https://test.ecocash.co.zw")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-long-enough")
@@ -45,6 +44,20 @@ class TestConfig:
         assert s.CLINIC_ADDRESS == "Harare, Zimbabwe"
         assert s.APP_ENV == "development"
         assert s.LOG_LEVEL == "INFO"
+
+    def test_twilio_sender_derived_from_clinic_number(self):
+        from app.config import Settings
+
+        s = Settings()
+        assert s.twilio_sender == "whatsapp:+14155238886"
+        assert s.twilio_sender.startswith("whatsapp:")
+
+    def test_twilio_sender_no_double_prefix(self):
+        from app.config import Settings
+
+        s = Settings(CLINIC_WHATSAPP_NUMBER="whatsapp:+14155238886")
+        assert s.twilio_sender == "whatsapp:+14155238886"
+        assert s.twilio_sender.count("whatsapp:") == 1
 
     def test_settings_singleton(self):
         from app.config import get_settings
@@ -438,6 +451,7 @@ class TestAppFactory:
             assert "/jobs/send-reminders" in routes
             assert "/jobs/expire-payments" in routes
             assert "/jobs/expire-sessions" in routes
+            assert "/jobs/run-all" in routes
 
 
 # ── 8. Security Tests ────────────────────────────────────────────────────────
@@ -638,9 +652,8 @@ class TestVercelConfig:
             config = json.load(f)
 
         cron_paths = {c["path"] for c in config["crons"]}
-        assert "/jobs/send-reminders" in cron_paths
-        assert "/jobs/expire-sessions" in cron_paths
-        assert "/jobs/expire-payments" in cron_paths
+        assert "/jobs/run-all" in cron_paths
+        assert len(config["crons"]) == 1  # Hobby plan: single cron only
 
 
 if __name__ == "__main__":

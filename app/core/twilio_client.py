@@ -48,7 +48,7 @@ async def send_whatsapp_message(
         No exceptions are raised — errors are caught and logged.
     """
     settings = get_settings()
-    sender = from_number or settings.TWILIO_WHATSAPP_NUMBER
+    sender = from_number or settings.twilio_sender
 
     try:
         client = _get_twilio_client()

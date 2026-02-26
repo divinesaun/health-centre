@@ -3,8 +3,6 @@
   "builds": [{ "src": "api/index.py", "use": "@vercel/python" }],
   "routes": [{ "src": "/(.*)", "dest": "api/index.py" }],
   "crons": [
-    { "path": "/jobs/send-reminders", "schedule": "*/5 * * * *" },
-    { "path": "/jobs/expire-sessions", "schedule": "*/10 * * * *" },
-    { "path": "/jobs/expire-payments", "schedule": "*/3 * * * *" }
+    { "path": "/jobs/run-all", "schedule": "0 * * * *" }
   ]
 }
