@@ -29,7 +29,7 @@ def get_supabase_client() -> Client:
         settings = get_settings()
         _supabase_client = create_client(
             settings.SUPABASE_URL,
-            settings.SUPABASE_PUBLISHABLE_KEY,
+            settings.SUPABASE_SERVICE_ROLE_KEY,
         )
         logger.info("supabase_client_initialized")
     return _supabase_client

@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     Attributes:
         SUPABASE_URL: Supabase project URL.
-        SUPABASE_PUBLISHABLE_KEY: Supabase publishable/service key.
+        SUPABASE_SERVICE_ROLE_KEY: Supabase service role key (bypasses RLS).
         TWILIO_ACCOUNT_SID: Twilio account SID.
         TWILIO_AUTH_TOKEN: Twilio auth token.
         TWILIO_WHATSAPP_NUMBER: Default Twilio WhatsApp sender number.
@@ -41,7 +41,7 @@ class Settings(BaseSettings):
 
     # Supabase
     SUPABASE_URL: str
-    SUPABASE_PUBLISHABLE_KEY: str
+    SUPABASE_SERVICE_ROLE_KEY: str
 
     # Twilio
     TWILIO_ACCOUNT_SID: str
